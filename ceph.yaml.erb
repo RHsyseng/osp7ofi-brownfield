@@ -1,0 +1,60 @@
+<%  
+    require 'facter'
+    require 'securerandom'
+
+    #generate uuid
+    #fsid_uuid_auto = SecureRandom.uuid
+    #This is the fsid of the se-ceph cluster
+    fsid_uuid_auto = "cd0d33e2-9e44-489d-8b5c-53e4fcb9a8ad"
+    secret_uuid_auto = SecureRandom.uuid
+
+    #ceph volumes key
+    images_key_auto = `/usr/bin/ceph-authtool --gen-print-key`
+    volumes_key_auto = `/usr/bin/ceph-authtool --gen-print-key`
+    mon_initial_members_auto = ['sprosp1', 'sprosp2', 'sprosp3']
+    mon_host_auto = ['10.19.139.111', '10.19.139.112', '10.19.139.113' ]
+    cluster_network_auto = '192.168.0.0/16' 
+    public_network_auto = '10.19.141.0/21'
+    osd_ports_auto = ['6800-6850']
+    osd_proto_auto = 'tcp'
+    
+    cinder_use_rbd = 'true'
+    image_type = 'default'
+    fence_type = 'disabled'
+    glance_be = 'true'
+    rbd_suser = 'images'
+    dbug = 'false'
+
+%>
+
+---
+
+backend: 'rbd'
+pcmk_fs_manage: false
+debug: <%= dbug %>
+manage_ceph_conf: false
+rbd_secret_uuid: <%= secret_uuid_auto %>
+cinder_rbd_secret_uuid: <%= secret_uuid_auto %>
+#rbd_store_user: <%= rbd_suser %>
+ports: <%= osd_ports_auto %>
+proto: <%= osd_proto_auto %>
+cluster_network: <%= cluster_network_auto %>
+fsid:  <%= fsid_uuid_auto %>
+images_key: <%= images_key_auto %>
+mon_host: <%= mon_host_auto %>
+mon_initial_members: <%= mon_initial_members_auto %>
+public_network: <%= public_network_auto %>
+volumes_key: <%= volumes_key_auto %>
+ceph_cluster_network: <%= cluster_network_auto %>
+ceph_fsid:  <%= fsid_uuid_auto %>
+ceph_images_key: <%= images_key_auto %>
+ceph_mon_host: <%= mon_host_auto %>
+ceph_mon_initial_members: <%= mon_initial_members_auto %>
+ceph_public_network: <%= public_network_auto %>
+ceph_volumes_key: <%= volumes_key_auto %>
+cinder_backend_rbd: <%= cinder_use_rbd %> 
+glance_backend_rbd: <%= glance_be %>
+glance_backend: 'rbd'
+backend_rbd: <%= cinder_use_rbd %>
+libvirt_images_type: <%= image_type %>
+
