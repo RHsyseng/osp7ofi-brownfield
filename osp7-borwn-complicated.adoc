@@ -1,0 +1,152 @@
+== Description
+
+This document will describe the installation of a OSP7 cluster using the OFI inistaller and integrate into an existing RHCS Cluster. 
+
+== Requirements
+
+* Exising RHCS / Ceph installation. The se-ceph RHCS Cluster will be used for this installation.  This cluser consists of
+
+** se-calamari - the Calamari and install server
+
+** se-ceph-mon{1,2,3} - The RHCS Monitors
+
+** se-ceph-osd{1,2,3} - The RHCS OSD 
+
+* RHOSP nodes installed with the base operating system
+
+== Caution
+
+*The steps to customize the pool names is untestsed but "should work".*
+
+== Process
+
+=== Yaml.erb configuration
+
+Update yaml.erb files as needed for environment need for Ceph storage. There are several important settings
+
+* (required) 'manage_ceph_conf' should be set to 'false'. This will prevent the puppt from creating the ceph.conf files.
+
+* (required) 'fsid' should be set to the fsid value from the /etc/ceph/ceph.conf file of a Ceph monitor.
+
+* (optional) 'libvirt_images_type' can be set to 'default' to have the local compute node disk to be used for instance ephemerial storage.
+
+* (suggested) 'rbd_user' should be set to the name of RBD client selected for disk data images. Ths value defaults to 'volumes'.
+
+* (suggested) 'rbd_store_user' should be set to the name ofthe RBD client selected for boot images. This value defaults to 'images'.
+
+* (suggested) 'rbd_pool' should be set to the name of RBD pool selected for disk data images. Ths value defaults to 'volumes'.
+
+* (suggested) 'rbd_store_pool' should be set to the name ofthe RBD pool selected for boot images. This value defaults to 'images'.
+
+* (suggested) 'libvirt_images_rbd_pool' should be set to the name of the RBD pool selected for running instance images. This should match 'rbd_pool' if the same pool is used or a custom pool for ephemeral storageThis value defaults to 'volumes'.
+
+=== OSPd installation
+
+The OSPd undercound needs to be installed and the OSP hosts configured for OFI deployment
+
+* Log into rhos-foreman as root
+
+* Run the OFI installation and configuration scripts
+
+** cd /pub/projects/rhos/kilo/script/kdsosp/scripts
+
+** ./inst-foreman-noprovo.sh to install OSPd undercloud and to configure the OFI installation
+
+** ./pre-sprosp.sh to configure all of the OSP hosts to use the OSPd server for configuration.
+
+
+== Configure OSP Controller Servers
+
+* From rhos-foreman, Log into sprosp1 sprosp2 and sprosp3 at the same time and start the configuration of all three servers at the same time by running
+
+** script -c "puppet agent -tvd --trace" puppet1.txt
+
+* Log into se-ceph-mon1
+
+** Become the Ceph user
+
+*** su - ceph
+
+** Copy the ceph user key to the OSP nodes for the root user
+
+*** for host in sprosp1 sprosp2 sprosp3; do ssh-copy-id root@$host ; done
+
+** Add the ceph user to the client nodes
+
+*** for host in sprosp1 sprosp2 sprosp3; do ssh /pub/users/kschinck/se-ceph/install-root-client.sh ; done
+
+** Change to the cluster working directory
+
+*** cd cluster
+
+**   make on node an admin host for convenance 
+
+*** ceph-deploy admin sprosp1
+
+**  make the other controllers 
+
+*** ceph-deploy config push sprosp2 sprosp3
+
+** Complete the Ceph configuration
+
+*** ssh root@sprosp1
+
+*** rename the /etc/ceph/ceph.client.images.keyring to /etc/ceph/ceph.client.'$rbd_store_pool'.keyring
+
+*** edit /etc/ceph/ceph.client.'$rbd_store_pool'.keyring. 
+
+**** Replace 'images' in the client name section with the '$rbd_store_user' value
+
+**** Replace 'images' in the permissions section with the '$rbd_store_pool' value
+
+*** ceph auth import -i /etc/ceph/ceph.client.'$rbd_store_pool'.keyring
+
+*** rename /etc/ceph/ceph.client.volumes.kering to /etc/ceph/ceph.client.'$rbd_pool'.keyring
+
+*** edit /etc/ceph/ceph.client.'$rbd_store'.keyring. 
+
+**** Replace 'volumes' in the client name section with the '$rbd_user' value
+
+**** Replace 'volumes' in the permissions section with the '$rbd_pool' value
+
+**** Replace 'images' in the permissions section with the '$rbd_store_pool' value
+
+**** If 'libvirt_images_rbd_pool' has been customized, update the permissions section and add ",allow rwx pool='$libvirt_images_rbd_pool'"
+
+*** ceph auth import -i /etc/ceph/ceph.client.'$rbd_store'.volumes.keyring
+
+*** ceph osd pool create '$rbd_store_pool' 2048
+
+*** ceph osd pool create '$rbd_pool' 2048
+
+*** ceph osd pool create '$libvirt_images_rbd_pool' 2048
+
+** Copy updated client keyrings
+
+*** The updated client keyrings need to be copied to the other OSP controller and compute nodes. 
+
+** Restart Openstack services on each controller node
+
+*** systemctl restart openstack-glance-api
+
+*** systemctl restart openstack-glance-registry
+
+*** systemctl restart openstack-cinder-volume
+
+**  Verify controller operation and ceph integration
+
+*** Check and start services as needed. All deployed services should be running. 
+
+*** rados lspools
+
+== Deploy OSP Computes
+
+** Log into sprosp4 and sprosp5 as root
+
+** Configure the controllers
+
+*** run script -c "puppet agent -tvd --trace" puppet-1.txt
+
+** Check openstack-status.  All controller and computing services should be up. 
+
+== Test according to needs
